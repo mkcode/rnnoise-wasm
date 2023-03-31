@@ -9,8 +9,10 @@ export CXXFLAGS=${OPTIMIZE}
 
 ENTRY_POINT="rnnoise.js"
 ENTRY_POINT_SYNC="rnnoise-sync.js"
+ENTRY_POINT_CUSTOM="rnnoise-custom.js"
 MODULE_CREATE_NAME="createRNNWasmModule"
 MODULE_CREATE_NAME_SYNC="createRNNWasmModuleSync"
+MODULE_CREATE_NAME_CUSTOM="createRNNWasmModuleCustom"
 RNN_EXPORTED_FUNCTIONS="['_rnnoise_process_frame', '_rnnoise_init', '_rnnoise_destroy', '_rnnoise_create', '_malloc', '_free']"
 
 
@@ -69,6 +71,22 @@ echo "============================================="
     .libs/librnnoise.${SO_SUFFIX} \
     -o ./$ENTRY_POINT_SYNC
 
+  emcc \
+    ${OPTIMIZE} \
+    -g2 \
+    -s ALLOW_MEMORY_GROWTH=1 \
+    -s MALLOC=emmalloc \
+    -s MODULARIZE=1 \
+    -s ENVIRONMENT="web,worker" \
+    -s EXPORT_ES6=1 \
+    -s USE_ES6_IMPORT_META=1 \
+    -s WASM_ASYNC_COMPILATION=1 \
+    -s SINGLE_FILE=1 \
+    -s EXPORT_NAME=${MODULE_CREATE_NAME_CUSTOM} \
+    -s EXPORTED_FUNCTIONS="${RNN_EXPORTED_FUNCTIONS}" \
+    .libs/librnnoise.${SO_SUFFIX} \
+    -o ./$ENTRY_POINT_CUSTOM
+
   # Create output folder
   rm -rf ../dist
   mkdir -p ../dist
@@ -76,6 +94,7 @@ echo "============================================="
   # Move artifacts
   mv $ENTRY_POINT ../dist/
   mv $ENTRY_POINT_SYNC ../dist/
+  mv $ENTRY_POINT_CUSTOM ../dist/
   mv rnnoise.wasm ../dist/
 
   # Clean cluttter
