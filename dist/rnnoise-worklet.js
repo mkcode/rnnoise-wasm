@@ -1,11 +1,11 @@
 
-var createRNNWasmModuleCustom = (() => {
-  var _scriptDir = import.meta.url;
+var createRNNWasmModuleWorklet = (() => {
+  var _scriptDir = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : undefined;
   
   return (
-function(createRNNWasmModuleCustom = {})  {
+function(createRNNWasmModuleWorklet = {})  {
 
-var Module = typeof createRNNWasmModuleCustom != "undefined" ? createRNNWasmModuleCustom : {};
+var Module = typeof createRNNWasmModuleWorklet != "undefined" ? createRNNWasmModuleWorklet : {};
 
 var readyPromiseResolve, readyPromiseReject;
 
@@ -272,58 +272,29 @@ function getBinary(file) {
   if (readBinary) {
    return readBinary(file);
   }
-  throw "both async and sync fetching of the wasm failed";
+  throw "sync fetching of the wasm failed: you can preload it to Module['wasmBinary'] manually, or emcc.py will do that for you when generating HTML (but not JS)";
  } catch (err) {
   abort(err);
  }
 }
 
-function getBinaryPromise(binaryFile) {
- if (!wasmBinary && (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER)) {
-  if (typeof fetch == "function") {
-   return fetch(binaryFile, {
-    credentials: "same-origin"
-   }).then(function(response) {
-    if (!response["ok"]) {
-     throw "failed to load wasm binary file at '" + binaryFile + "'";
-    }
-    return response["arrayBuffer"]();
-   }).catch(function() {
-    return getBinary(binaryFile);
-   });
+function instantiateSync(file, info) {
+ var instance;
+ var module;
+ var binary;
+ try {
+  binary = getBinary(file);
+  module = new WebAssembly.Module(binary);
+  instance = new WebAssembly.Instance(module, info);
+ } catch (e) {
+  var str = e.toString();
+  err("failed to compile wasm module: " + str);
+  if (str.includes("imported Memory") || str.includes("memory import")) {
+   err("Memory size incompatibility issues may be due to changing INITIAL_MEMORY at runtime to something too large. Use ALLOW_MEMORY_GROWTH to allow any size memory (and also make sure not to set INITIAL_MEMORY at runtime to something smaller than it was at compile time).");
   }
+  throw e;
  }
- return Promise.resolve().then(function() {
-  return getBinary(binaryFile);
- });
-}
-
-function instantiateArrayBuffer(binaryFile, imports, receiver) {
- return getBinaryPromise(binaryFile).then(function(binary) {
-  return WebAssembly.instantiate(binary, imports);
- }).then(function(instance) {
-  return instance;
- }).then(receiver, function(reason) {
-  err("failed to asynchronously prepare wasm: " + reason);
-  abort(reason);
- });
-}
-
-function instantiateAsync(binary, binaryFile, imports, callback) {
- if (!binary && typeof WebAssembly.instantiateStreaming == "function" && !isDataURI(binaryFile) && typeof fetch == "function") {
-  return fetch(binaryFile, {
-   credentials: "same-origin"
-  }).then(function(response) {
-   var result = WebAssembly.instantiateStreaming(response, imports);
-   return result.then(callback, function(reason) {
-    err("wasm streaming compile failed: " + reason);
-    err("falling back to ArrayBuffer instantiation");
-    return instantiateArrayBuffer(binaryFile, imports, callback);
-   });
-  });
- } else {
-  return instantiateArrayBuffer(binaryFile, imports, callback);
- }
+ return [ instance, module ];
 }
 
 function createWasm() {
@@ -341,9 +312,6 @@ function createWasm() {
   return exports;
  }
  addRunDependency("wasm-instantiate");
- function receiveInstantiationResult(result) {
-  receiveInstance(result["instance"]);
- }
  if (Module["instantiateWasm"]) {
   try {
    return Module["instantiateWasm"](info, receiveInstance);
@@ -352,8 +320,8 @@ function createWasm() {
    readyPromiseReject(e);
   }
  }
- instantiateAsync(wasmBinary, wasmBinaryFile, info, receiveInstantiationResult).catch(readyPromiseReject);
- return {};
+ var result = instantiateSync(wasmBinaryFile, info);
+ return receiveInstance(result[0]);
 }
 
 function callRuntimeCallbacks(callbacks) {
@@ -464,37 +432,21 @@ var wasmImports = {
 
 var asm = createWasm();
 
-var ___wasm_call_ctors = function() {
- return (___wasm_call_ctors = Module["asm"]["d"]).apply(null, arguments);
-};
+var ___wasm_call_ctors = asm["d"];
 
-var _rnnoise_init = Module["_rnnoise_init"] = function() {
- return (_rnnoise_init = Module["_rnnoise_init"] = Module["asm"]["e"]).apply(null, arguments);
-};
+var _rnnoise_init = Module["_rnnoise_init"] = asm["e"];
 
-var _rnnoise_create = Module["_rnnoise_create"] = function() {
- return (_rnnoise_create = Module["_rnnoise_create"] = Module["asm"]["f"]).apply(null, arguments);
-};
+var _rnnoise_create = Module["_rnnoise_create"] = asm["f"];
 
-var _malloc = Module["_malloc"] = function() {
- return (_malloc = Module["_malloc"] = Module["asm"]["g"]).apply(null, arguments);
-};
+var _malloc = Module["_malloc"] = asm["g"];
 
-var _rnnoise_destroy = Module["_rnnoise_destroy"] = function() {
- return (_rnnoise_destroy = Module["_rnnoise_destroy"] = Module["asm"]["h"]).apply(null, arguments);
-};
+var _rnnoise_destroy = Module["_rnnoise_destroy"] = asm["h"];
 
-var _free = Module["_free"] = function() {
- return (_free = Module["_free"] = Module["asm"]["i"]).apply(null, arguments);
-};
+var _free = Module["_free"] = asm["i"];
 
-var _rnnoise_process_frame = Module["_rnnoise_process_frame"] = function() {
- return (_rnnoise_process_frame = Module["_rnnoise_process_frame"] = Module["asm"]["j"]).apply(null, arguments);
-};
+var _rnnoise_process_frame = Module["_rnnoise_process_frame"] = asm["j"];
 
-var ___errno_location = function() {
- return (___errno_location = Module["asm"]["__errno_location"]).apply(null, arguments);
-};
+var ___errno_location = asm["__errno_location"];
 
 var calledRun;
 
@@ -544,9 +496,9 @@ if (Module["preInit"]) {
 run();
 
 
-  return createRNNWasmModuleCustom.ready
+  return createRNNWasmModuleWorklet
 }
 
 );
 })();
-export default createRNNWasmModuleCustom;
+export default createRNNWasmModuleWorklet;
