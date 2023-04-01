@@ -7,12 +7,10 @@ export LDFLAGS=${OPTIMIZE}
 export CFLAGS=${OPTIMIZE}
 export CXXFLAGS=${OPTIMIZE}
 
-ENTRY_POINT="rnnoise.js"
-ENTRY_POINT_SYNC="rnnoise-sync.js"
-ENTRY_POINT_CUSTOM="rnnoise-custom.js"
-MODULE_CREATE_NAME="createRNNWasmModule"
-MODULE_CREATE_NAME_SYNC="createRNNWasmModuleSync"
-MODULE_CREATE_NAME_CUSTOM="createRNNWasmModuleCustom"
+ENTRY_POINT_WORKLET="rnnoise-worklet.js"
+ENTRY_POINT_BROWSER="rnnoise.js"
+MODULE_CREATE_NAME_WORKLET="createRNNWasmModuleWorklet"
+MODULE_CREATE_NAME_BROWSER="createRNNWasmModule"
 RNN_EXPORTED_FUNCTIONS="['_rnnoise_process_frame', '_rnnoise_init', '_rnnoise_destroy', '_rnnoise_create', '_malloc', '_free']"
 
 
@@ -38,39 +36,24 @@ echo "============================================="
   emmake make clean
   emmake make V=1
 
-  # Compile librnnoise generated LLVM bytecode to wasm with an async loading module.
+  # Worklet is sync, inline the wasm, and no es6 import meta
   emcc \
     ${OPTIMIZE} \
     -g2 \
-    -s STRICT=1 \
     -s ALLOW_MEMORY_GROWTH=1 \
     -s MALLOC=emmalloc \
     -s MODULARIZE=1 \
     -s ENVIRONMENT="web,worker" \
     -s EXPORT_ES6=1 \
     -s USE_ES6_IMPORT_META=0 \
-    -s EXPORT_NAME=${MODULE_CREATE_NAME} \
-    -s EXPORTED_FUNCTIONS="${RNN_EXPORTED_FUNCTIONS}" \
-    .libs/librnnoise.${SO_SUFFIX} \
-    -o ./$ENTRY_POINT
-
-  # Compile librnnoise generated LLVM bytecode to wasm with a sync loading module and inline wasm bytecode.
-  emcc \
-    ${OPTIMIZE} \
-    -g2 \
-    -s ALLOW_MEMORY_GROWTH=1 \
-    -s MALLOC=emmalloc \
-    -s MODULARIZE=1 \
-    -s ENVIRONMENT="web,worker" \
-    -s EXPORT_ES6=1 \
-    -s USE_ES6_IMPORT_META=1 \
     -s WASM_ASYNC_COMPILATION=0 \
     -s SINGLE_FILE=1 \
-    -s EXPORT_NAME=${MODULE_CREATE_NAME_SYNC} \
+    -s EXPORT_NAME=${MODULE_CREATE_NAME_WORKLET} \
     -s EXPORTED_FUNCTIONS="${RNN_EXPORTED_FUNCTIONS}" \
     .libs/librnnoise.${SO_SUFFIX} \
-    -o ./$ENTRY_POINT_SYNC
+    -o ./$ENTRY_POINT_WORKLET
 
+  # Browser is async, inline the wasm, and yes es6 import meta
   emcc \
     ${OPTIMIZE} \
     -g2 \
@@ -82,20 +65,18 @@ echo "============================================="
     -s USE_ES6_IMPORT_META=1 \
     -s WASM_ASYNC_COMPILATION=1 \
     -s SINGLE_FILE=1 \
-    -s EXPORT_NAME=${MODULE_CREATE_NAME_CUSTOM} \
+    -s EXPORT_NAME=${MODULE_CREATE_NAME_BROWSER} \
     -s EXPORTED_FUNCTIONS="${RNN_EXPORTED_FUNCTIONS}" \
     .libs/librnnoise.${SO_SUFFIX} \
-    -o ./$ENTRY_POINT_CUSTOM
+    -o ./$ENTRY_POINT_BROWSER
 
   # Create output folder
   rm -rf ../dist
   mkdir -p ../dist
 
   # Move artifacts
-  mv $ENTRY_POINT ../dist/
-  mv $ENTRY_POINT_SYNC ../dist/
-  mv $ENTRY_POINT_CUSTOM ../dist/
-  mv rnnoise.wasm ../dist/
+  mv $ENTRY_POINT_WORKLET ../dist/
+  mv $ENTRY_POINT_BROWSER ../dist/
 
   # Clean cluttter
   git clean -f -d
